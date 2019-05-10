@@ -1,0 +1,14 @@
+#ignoring object files
+*.o
+#ignoring library
+*.a *.so
+#ignoring all emacs temp files
+*~
+#ignoring cmake's build directory
+build/
+#ignoring build directory
+bin/
+#ignoring nohup.out cmake file
+nohup.out
+#ignoring multimedia files
+*.mp4
