@@ -112,7 +112,7 @@ int main(int argc, char **argv){
 		//"max-size-bytes", 1000000,
 		"max-files", FILES_NUMBER,
 		//"muxer", muxer,
-		//"send-keyframe-requests", true, //this is necessary, otherwise we can have sporadic errors. It doesn't solve the issue
+		"send-keyframe-requests", true, 
 		NULL);
 
   // Connect to the pad-added signal 
@@ -255,11 +255,11 @@ gchar* formatted_file_saving_handler(GstChildProxy *splitmux, guint fragment_id)
 
   // filenames[fragment_id] = filename_buffer;
 
-  time_t rawtime;
-  struct tm * timeinfo;
+  std::time_t now;
+  struct tm *timeinfo;
   
-  time (&rawtime);
-  timeinfo = localtime (&rawtime);
+  std::time (&now);
+  timeinfo = std::localtime (&now);
 
   //if int the filenames array at the fragment_id position we already had
   //a filename we must delete it
@@ -271,9 +271,9 @@ gchar* formatted_file_saving_handler(GstChildProxy *splitmux, guint fragment_id)
   strftime (filenames[fragment_id], 30, "%F_%T", timeinfo);
 
   //making filename string in the forma YYYY-mm-dd_hh:mm:ss_filename_fragment_id
-  sprintf(filenames[fragment_id], "%s_%s_%d.mp4", filenames[fragment_id], filename, fragment_id);
+  sprintf( filenames[fragment_id], "%s_%s_%d.mp4", filenames[fragment_id], filename, fragment_id );
 
-  D(std::cout<<filenames[fragment_id]<<std::endl);
+  D( std::cout << filenames[fragment_id] << std::endl );
   //this function allocates the memory to hold the result.
   //The returned string should be freed with g_free() when no longer needed
   //This should be done by the function caller, I guess
