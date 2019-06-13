@@ -1,3 +1,5 @@
+#define DEBUG
+
 #include<gst/gst.h>
 #include<glib/gprintf.h> //for g_strdup_printf ()
 #include<ctime>
@@ -7,6 +9,8 @@
 #include<chrono>
 #include"Utils.hh"
 #include <gst/base/gstbaseparse.h> //for gst_base_parse_set_pts_interpolation ()
+#include <boost/core/ignore_unused.hpp>
+#include <unistd.h>
 
 const int FILES_NUMBER = 12;
 
@@ -22,18 +26,18 @@ typedef struct _CustomData {
 
 //static std::string filenames[FILES_NUMBER] = {std::string()};
 static char *filenames[FILES_NUMBER] = {new char[30](), new char[30](), new char[30](), new char[30](),
-			      new char[30](), new char[30](), new char[30](), new char[30](),
-			      new char[30](), new char[30](), new char[30](), new char[30]()};
+					new char[30](), new char[30](), new char[30](), new char[30](),
+					new char[30](), new char[30](), new char[30](), new char[30]()};
 
 static const char *rtsp_url = "rtsp://192.168.4.12:8554/test";
 static const char *filename = "cam02";
 static  guint64 max_size_time = 3000000000;
 
 static GOptionEntry entries[] = {
-    { "rtsp_url", 0, 0, G_OPTION_ARG_STRING, &rtsp_url, "Rtsp server to connect to", "URL" },
-    { "filename", 0, 0, G_OPTION_ARG_STRING, &filename, "Filename", "ID" },
-    { "max_size_time", 0, 0, G_OPTION_ARG_INT64, &max_size_time, "max_size_time", "max_size_time" },
-    { NULL },
+  { "rtsp_url", 'r', 0, G_OPTION_ARG_STRING, &rtsp_url, "Rtsp server to connect to", "URL" },
+  { "filename", 'f', 0, G_OPTION_ARG_STRING, &filename, "Filename", "ID" },
+  { "max_size_time", 'm', 0, G_OPTION_ARG_INT64, &max_size_time, "max_size_time", "max_size_time" },
+  { NULL },
 };
   
 // Handler for the pad-added signal 
@@ -52,7 +56,7 @@ int main(int argc, char **argv){
   context = g_option_context_new ("- multifiles_saving-pipeline");
   g_option_context_add_main_entries (context, entries, NULL);
   g_option_context_add_group (context, gst_init_get_option_group ());
-  //alessandro: parsing command line
+  //parsing command line
   if (!g_option_context_parse (context, &argc, &argv, &error)) {
     g_printerr ("Error initializing: %s\n", error->message);
     return -1;
@@ -134,12 +138,16 @@ int main(int argc, char **argv){
   bus = gst_element_get_bus (data.pipeline);
   // GMainLoop *loop;
   guint bus_watch_id;
+  //let's create a GMainLoop structure:
+  //NULL as first parameter means that the default context will be used
   data.loop = g_main_loop_new (NULL, FALSE);
   bus_watch_id = gst_bus_add_watch (bus, bus_call, &data);
   g_print ("Running...\n");
+  //the main thread stops it till g_main_loop_quit() is called
+  //when this event occurs the g_main_loop_run returns
   g_main_loop_run (data.loop);
-  
-  // Free resources 
+
+  //Free resources 
   gst_object_unref (bus);
   gst_element_set_state (data.pipeline, GST_STATE_NULL);
   gst_object_unref (data.pipeline);
@@ -149,6 +157,35 @@ int main(int argc, char **argv){
     delete[] filenames[i];
   return 0;
 
+  //when there is an error trying to reconnect
+  // //wating for 10 seconds
+  // g_print("[multifiles_saving::main]. let's wait 10 seconds...\n");
+  // usleep(10 * 1000000);
+  // g_print("[multifiles_saving::main]. setting state...\n");
+  // ret = gst_element_set_state (data.pipeline, GST_STATE_NULL);
+  // if (ret == GST_STATE_CHANGE_FAILURE) 
+  //   g_printerr ("[multifiles_saving::main]. Unable to set the pipeline to the null state.\n");
+  // else{
+  //   g_printerr ("[multifiles_saving::main]. changing state in null succeeded.\n");
+  //   g_printerr("[multifiles_saving::main]. restoring format-location signal\n");
+  //   g_signal_connect( data.splitmuxsink, "format-location", G_CALLBACK (formatted_file_saving_handler), NULL);
+  // }
+  // g_print("trying to reset the pipeline in playing state\n");
+  // ret = gst_element_set_state (data.pipeline, GST_STATE_PLAYING);
+  // if (ret == GST_STATE_CHANGE_FAILURE) 
+  //   g_printerr ("[multifiles_saving::main]. Unable to set the pipeline to the playing state.\n");
+  // else
+  //   g_printerr ("[multifiles_saving::main]. change state in play succeeded.\n");
+  // g_main_loop_run(data.loop);
+  // // Free resources 
+  // gst_object_unref (bus);
+  // gst_element_set_state (data.pipeline, GST_STATE_NULL);
+  // gst_object_unref (data.pipeline);
+  // g_source_remove (bus_watch_id);
+  // //deallocating filenames
+  // for(int i = 0; i < FILES_NUMBER; ++i)
+  //   delete[] filenames[i];
+  // return 0;
 }
 
 
@@ -200,6 +237,7 @@ static void pad_added_handler (GstElement *src, GstPad *new_pad, CustomData *dat
 
 gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data){
   //GMainLoop *loop = (GMainLoop *)data;
+  boost::ignore_unused(bus);
   CustomData *CustomData_ptr = (CustomData *)data;
   GMainLoop *loop = CustomData_ptr->loop;
   //g_print( "got message %s %s \n", GST_MESSAGE_TYPE_NAME(msg), gst_structure_get_name ( gst_message_get_structure(msg) ) );
@@ -207,21 +245,74 @@ gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data){
   switch (GST_MESSAGE_TYPE (msg)) {
 
   case GST_MESSAGE_EOS:
-    g_print ("End of stream\n");
-    g_main_loop_quit (loop);
+    g_print ("[multifiles_saving::bus_call]. End of stream\n");
+    //g_main_loop_quit (loop);
     break;
 
   case GST_MESSAGE_ERROR: {
     gchar  *debug;
     GError *error;
+    // static bool trying_to_reconnect = false;
+
+    // if(!trying_to_reconnect){
+    //   trying_to_reconnect = true;
+    //   gst_message_parse_error (msg, &error, &debug);
+    //   g_free (debug);
+
+    //   g_printerr ("[multifiles_saving::bus_call]. Error: %s\n", error->message);
+    //   g_error_free (error);
+
+    //   //g_main_loop_quit (loop);
+    //   gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_READY);
+    //   //wating for 30 seconds
+    //   g_print("[multifiles_saving::bus_call]. let's wait 10 seconds to give time to reconnection...");
+    //   usleep(10 * 1000000);
+    //   g_print("trying to reset the pipeline in playing state\n");
+    //   GstStateChangeReturn ret = gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_PLAYING);
+    //   if (ret == GST_STATE_CHANGE_FAILURE) 
+    // 	g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the playing state.\n");
+    //   else{
+    // 	g_printerr ("[multifiles_saving::bus_call]. change state succeeded.\n");
+    // 	trying_to_reconnect = false;
+    //   }
+      
+    // }else{
+    //   gst_message_parse_error (msg, &error, &debug);
+    //   g_free (debug);
+    //   g_error_free (error);
+    // }
+
 
     gst_message_parse_error (msg, &error, &debug);
     g_free (debug);
-
-    g_printerr ("Error: %s\n", error->message);
+    
+    g_printerr ("[multifiles_saving::bus_call]. Error: %s\n", error->message);
     g_error_free (error);
-
-    g_main_loop_quit (loop);
+    
+    //g_main_loop_quit (loop);
+    
+    //this code snippet work
+    //wating for 10 seconds
+    g_print("[multifiles_saving::bus_call]. let's wait 10 seconds...\n");
+    usleep(10 * 1000000);
+    g_print("[multifiles_saving::bus_call]. setting state...\n");
+    //if put ready, after reconnection it starts from the last fragment-id
+    //if put null,  after reconnection it starts from the last fragment-id
+    GstStateChangeReturn ret = gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_READY);
+    if (ret == GST_STATE_CHANGE_FAILURE) 
+    g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the ready state.\n");
+    else{
+    g_printerr ("[multifiles_saving::bus_call]. changing state in ready succeeded.\n");
+    g_printerr("[multifiles_saving::bus_call]. restoring format-location signal\n");
+    //g_signal_connect( CustomData_ptr->splitmuxsink, "format-location", G_CALLBACK (formatted_file_saving_handler), NULL);
+    }
+    g_print("trying to reset the pipeline in playing state\n");
+    ret = gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_PLAYING);
+    if (ret == GST_STATE_CHANGE_FAILURE) 
+    g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the playing state.\n");
+    else
+    g_printerr ("[multifiles_saving::bus_call]. change state in play succeeded.\n");
+        
     break;
   }
   case GST_MESSAGE_ELEMENT: {
@@ -236,6 +327,8 @@ gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data){
 }
 
 gchar* formatted_file_saving_handler(GstChildProxy *splitmux, guint fragment_id){
+  boost::ignore_unused(splitmux);
+  //D( g_print("[formatted_file_saving_handler]. fragment_id: %d\n", fragment_id) );
   D( Time_spent<>() );  
   // time_t rawtime;
   // struct tm * timeinfo;
