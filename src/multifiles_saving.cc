@@ -27,10 +27,12 @@ static char *filenames[FILES_NUMBER] = {new char[30](), new char[30](), new char
 
 static const char *rtsp_url = "rtsp://192.168.4.12:8554/test";
 static const char *filename = "cam02";
+static  guint64 max_size_time = 3000000000;
 
 static GOptionEntry entries[] = {
     { "rtsp_url", 0, 0, G_OPTION_ARG_STRING, &rtsp_url, "Rtsp server to connect to", "URL" },
     { "filename", 0, 0, G_OPTION_ARG_STRING, &filename, "Filename", "ID" },
+    { "max_size_time", 0, 0, G_OPTION_ARG_INT64, &max_size_time, "max_size_time", "max_size_time" },
     { NULL },
 };
   
@@ -107,8 +109,9 @@ int main(int argc, char **argv){
   
   //GstElement *muxer = gst_element_factory_make("matroskamux", "matroskamux");
   //cyclically save 5 video seconds 12 times. values lower than 5 seconds cause a segmentation fault
+  g_print("max size time: %" G_GUINT64_FORMAT "\n", max_size_time);
   g_object_set (data.splitmuxsink, "location", "video%02d.mp4",
-		"max-size-time", 5000000000,
+		"max-size-time", max_size_time,
 		//"max-size-bytes", 1000000,
 		"max-files", FILES_NUMBER,
 		//"muxer", muxer,
