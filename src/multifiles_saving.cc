@@ -295,24 +295,39 @@ gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data){
     //wating for 10 seconds
     g_print("[multifiles_saving::bus_call]. let's wait 10 seconds...\n");
     usleep(10 * 1000000);
-    g_print("[multifiles_saving::bus_call]. setting state...\n");
     //if put ready, after reconnection it starts from the last fragment-id
     //if put null,  after reconnection it starts from the last fragment-id
-    GstStateChangeReturn ret = gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_READY);
+    gst_element_send_event(CustomData_ptr->pipeline, gst_event_new_eos());
+    usleep(1 * 1000000);
+    g_print("[multifiles_saving::bus_call]. setting state...\n");
+    GstStateChangeReturn ret = gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_NULL);
     if (ret == GST_STATE_CHANGE_FAILURE) 
-    g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the ready state.\n");
+      g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the NULL state.\n");
     else{
-    g_printerr ("[multifiles_saving::bus_call]. changing state in ready succeeded.\n");
-    g_printerr("[multifiles_saving::bus_call]. restoring format-location signal\n");
-    //g_signal_connect( CustomData_ptr->splitmuxsink, "format-location", G_CALLBACK (formatted_file_saving_handler), NULL);
+      g_printerr ("[multifiles_saving::bus_call]. changing state in ready succeeded.\n");
+      g_printerr("[multifiles_saving::bus_call]. restoring format-location signal\n");
+      //GstPad *split_sink= gst_element_get_static_pad (CustomData_ptr->splitmuxsink, "sink");
+      //GstPadTemplate *templ = gst_element_class_get_pad_template(GST_ELEMENT_GET_CLASS(CustomData_ptr->splitmuxsink), "video");
+      //GstPad *split_pad = gst_element_request_pad(CustomData_ptr->splitmuxsink, templ, NULL, NULL);
+      GstPad *split_pad = gst_element_get_static_pad(CustomData_ptr->splitmuxsink,"video");
+      GstPad *h264_src = gst_element_get_static_pad (CustomData_ptr->h264_parse, "src");
+      gst_pad_unlink (h264_src, split_pad);
+      gst_object_unref(CustomData_ptr->splitmuxsink);
+      gst_bin_remove(GST_BIN (CustomData_ptr->pipeline), CustomData_ptr->splitmuxsink);      
+      CustomData_ptr->splitmuxsink = gst_element_factory_make("splitmuxsink", "splitmuxsink");
+      gst_bin_add(GST_BIN(CustomData_ptr->pipeline), CustomData_ptr->splitmuxsink);
+      if( !gst_element_link(CustomData_ptr->h264_parse, CustomData_ptr->splitmuxsink) )
+	g_printerr ("parse and split nont linked");
+      g_signal_connect( CustomData_ptr->splitmuxsink, "format-location", G_CALLBACK (formatted_file_saving_handler), NULL);
     }
     g_print("trying to reset the pipeline in playing state\n");
     ret = gst_element_set_state (CustomData_ptr->pipeline, GST_STATE_PLAYING);
     if (ret == GST_STATE_CHANGE_FAILURE) 
-    g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the playing state.\n");
-    else
-    g_printerr ("[multifiles_saving::bus_call]. change state in play succeeded.\n");
-        
+      g_printerr ("[multifiles_saving::bus_call]. Unable to set the pipeline to the playing state.\n");
+    else{
+      g_printerr ("[multifiles_saving::bus_call]. change state in play succeeded.\n");
+      g_main_loop_run (CustomData_ptr->loop);
+    }
     break;
   }
   case GST_MESSAGE_ELEMENT: {
